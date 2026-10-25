@@ -108,6 +108,16 @@ namespace TideShot.UI
             if (GUI.Button(new Rect(w * 0.5f + 255f * k, Screen.height - 70f * k, 170f * k, 40f * k),
                     "4 精炼所 30")) { _d.BuildRefinery(_d.SelectedNode); }
 
+            // 生产队列进度 @trace UNIT-001（进度永不隐藏——UI 铁律 1）
+            if (_d.Building)
+            {
+                GUI.Label(new Rect(w * 0.5f - 240f * k, Screen.height - 12f * k, 300f * k, 18f * k),
+                    "建造中 " + Mathf.RoundToInt(_d.BuildProgress * 100) + "%",
+                    Style(Mathf.RoundToInt(12 * k), Gold));
+                Bar(new Rect(w * 0.5f - 240f * k, Screen.height - 22f * k, 200f * k, 4f * k),
+                    _d.BuildProgress, Gold);
+            }
+
             GUI.Label(new Rect(w * 0.5f - 240f * k, Screen.height - 20f * k, 500f * k, 20f * k),
                 "点击节点 = 设定舰队目的地（须与我方控制区相邻）",
                 Style(Mathf.RoundToInt(12 * k), Dim));

@@ -481,6 +481,20 @@ namespace TideShot.Gameplay
             return cleared;
         }
 
+        /// <summary>最近的威胁敌弹（破潮旗舰护航避弹用）。null = 半径内无敌弹。</summary>
+        public Vector2? NearestEnemyBullet(Vector2 pos, float radius)
+        {
+            Vector2? best = null;
+            float bestD = radius * radius;
+            for (int i = 0; i < Capacity; i++)
+            {
+                if (!_bullets[i].Alive || _bullets[i].FromPlayer) { continue; }
+                float d = (_bullets[i].Pos - pos).sqrMagnitude;
+                if (d < bestD) { bestD = d; best = _bullets[i].Pos; }
+            }
+            return best;
+        }
+
         /// <summary>清掉指定区域内的敌弹（玩家放大招 / 无敌时用）。</summary>
         public int ClearEnemyBulletsNear(Vector2 center, float radius)        {
             int cleared = 0;

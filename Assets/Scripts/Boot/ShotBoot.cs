@@ -140,6 +140,12 @@ namespace TideShot.Boot
             var hud = gameObject.AddComponent<TideShot.UI.BreakerHud>();
             hud.Initialize(breaker, cam);
 
+            // AI 指挥官接口：Agnes 以「调度者」身份真玩（不做微操）
+            var serverGo = new GameObject("BreakerServer");
+            serverGo.transform.SetParent(transform, false);
+            var server = serverGo.AddComponent<TideShot.Gameplay.BreakerServer>();
+            server.Initialize(breaker, player);
+
             Debug.Log("[ShotBoot] breaker boot done, seed=" + breaker.Map.Seed);
         }
 

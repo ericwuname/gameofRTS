@@ -28,6 +28,9 @@ namespace TideShot.Gameplay
         public int LastIncome { get; private set; }
         public int LastUpkeep { get; private set; }
         public int SelectedNode { get; private set; } = 0; // 舰队目的地
+        public bool Escorting { get; set; } = true;         // 旗舰护航（AI 玩/新手开，玩家按键即接管）
+        public bool Building => _buildQueue.Count > 0;      // @trace UNIT-001 生产队列
+        public float BuildProgress => Building ? 1f - _buildTimer / BuildTime : 0f;
 
         public PlayerShip Player;
         public BulletField Bullets;
@@ -35,8 +38,12 @@ namespace TideShot.Gameplay
         public FxLayer Fx;
 
         public const int MaxFleet = 6;                    // @trace UNIT-001
+        public const float BuildTime = 3.0f;              // 生产节拍（红警式心跳，非瞬发）
         public readonly List<Fleet> FleetUnits = new();
         private readonly List<Fleet> _dead = new();
+        private readonly Queue<Fleet.Kind> _buildQueue = new();
+        private float _buildTimer;
+        private readonly List<Harvester> _harvesters = new();  // @trace ECON-001 矿车经济
         private readonly Dictionary<EnemyShip, NodeMap.Node> _garrisonIndex = new();
         private bool _reinforce;                          // 增援人格 @trace DEF-001
         private int _lastNet;
@@ -105,19 +112,111 @@ namespace TideShot.Gameplay
             // Wave：全速运行 @trace LOOP-001
             float dt = Time.deltaTime;
             WaveTimer -= dt;
+            TickEscort(dt);
             Player.Tick(dt, Bullets);
             Bullets.Tick(dt);
             Enemies.Tick(dt);
             TickFleets(dt);
+            TickHarvesters(dt);
+            TickBuildQueue(dt);
             Fx.Tick(dt);
 
             if (WaveTimer <= 0f) { EndWave(); }
         }
 
+        /// <summary>生产队列 @trace UNIT-001：红警式心跳，扣款即时、舰体到时下水。</summary>
+        private void TickBuildQueue(float dt)
+        {
+            if (!Building) { return; }
+            _buildTimer -= dt;
+            if (_buildTimer > 0f) { return; }
+            var kind = _buildQueue.Dequeue();
+            var home = Map.Nodes[0];
+            FleetUnits.Add(Fleet.Spawn(kind,
+                home.Pos + Vector2.right * UnityEngine.Random.Range(-0.5f, 0.5f),
+                transform, SpriteFactory.Triangle(72, FleetColor, Color.white),
+                SpriteFactory.Glow(96, FleetColor)));
+            Sfx.LevelUp();
+            FloatText.Push(home.Pos + Vector2.up * 1.2f, "舰 体 就 绪",
+                new Color32(0xB4, 0xFF, 0xE8, 0xFF), true);
+        }
+
+        /// <summary>矿车节拍 @trace ECON-001：经济从结算数字变成看得见的流动。</summary>
+        private void TickHarvesters(float dt)
+        {
+            // 占领矿脉 → 自动出车；失守/升级精炼 → 旧车退役
+            foreach (var n in Map.Nodes)
+            {
+                if (n.Type != NodeMap.NodeType.Mine && n.Type != NodeMap.NodeType.Refinery)
+                { continue; }
+                bool has = _harvesters.Exists(h => h.Alive && h.SourceId == n.Id);
+                if (n.Owned && !has)
+                {
+                    var h = new Harvester(n.Pos, Map.Nodes[0].Pos, transform,
+                        SpriteFactory.Diamond(48, new Color32(0xFF, 0xD2, 0x4D, 0xFF), Color.white),
+                        SpriteFactory.Glow(64, new Color32(0xFF, 0xD2, 0x4D, 0xFF)));
+                    h.SourceId = n.Id;
+                    _harvesters.Add(h);
+                    FloatText.Push(n.Pos + Vector2.up * 0.6f, "矿 车 出 动",
+                        new Color32(0xFF, 0xD2, 0x4D, 0xFF), false);
+                }
+            }
+            for (int i = _harvesters.Count - 1; i >= 0; i--)
+            {
+                var h = _harvesters[i];
+                var src = Map.Nodes[h.SourceId];
+                if (!src.Owned || src.Type == NodeMap.NodeType.Sentry) { h.Destroy(); _harvesters.RemoveAt(i); continue; }
+                int haul = h.Tick(dt) * (src.Type == NodeMap.NodeType.Refinery ? 2 : 1);
+                if (haul > 0)
+                {
+                    Tide += haul;
+                    FloatText.Push(Map.Nodes[0].Pos + Vector2.up * 0.8f, "+" + haul,
+                        new Color32(0xFF, 0xD2, 0x4D, 0xFF), false);
+                }
+            }
+        }
+
+        /// <summary>旗舰护航：跟随舰队重心 + 基础避弹。玩家按任意移动键即接管。</summary>
+        private void TickEscort(float dt)
+        {
+            if (!Escorting || !Player.IsAlive) { return; }
+            if (Input.GetAxisRaw("Horizontal") != 0f || Input.GetAxisRaw("Vertical") != 0f)
+            { Escorting = false; Player.ExternalInput = null; return; }
+
+            Vector2 anchor = Map.Nodes[SelectedNode].Owned || LivingFleet() == 0
+                ? Map.Nodes[SelectedNode].Pos
+                : FleetCenter();
+            Vector2 to = anchor - Player.Position;
+            Vector2 drive = to.sqrMagnitude > 1.2f ? to.normalized : Vector2.zero;
+
+            // 基础避弹 AI：最近敌弹 <2.5 单位时垂直逃离（权重压过跟随）。
+            // 没有它，护航旗舰站桩吃扇形弹 12 秒内必沉——Agnes 首局已验证。
+            Vector2? threat = Bullets.NearestEnemyBullet(Player.Position, 2.5f);
+            if (threat.HasValue)
+            {
+                Vector2 away = Player.Position - threat.Value;
+                drive = (drive * 0.35f + away.normalized * 1.2f).normalized;
+            }
+            Player.ExternalInput = drive;
+        }
+
+        private Vector2 FleetCenter()
+        {
+            Vector2 c = Vector2.zero; int k = 0;
+            foreach (var f in FleetUnits)
+            {
+                if (!f.Alive) { continue; }
+                c += f.Pos; k++;
+            }
+            return k > 0 ? c / k : Player.Position;
+        }
+
         private void StartWave()
         {
             Wave++;
-            WaveTimer = WaveLength;
+            // 首波短而弱：红警调研结论「时间-快乐转换效率」——
+            // 玩家要在 2 分钟内尝到第一次推平哨线的甜头
+            WaveTimer = Wave <= 1 ? 16f : WaveLength;
             State = BreakerState.Wave;
 
             // 增援人格 @trace DEF-001
@@ -201,6 +300,9 @@ namespace TideShot.Gameplay
                         ? EnemyKind.Spinner : EnemyKind.Shooter;
                     Vector2 off = new Vector2(
                         UnityEngine.Random.Range(-1.6f, 1.6f), UnityEngine.Random.Range(-1.2f, 1.2f));
+                    // 首波全线 -1：开局正反馈提速，别让玩家第一波就吃满配驻军
+                    int quota = n.GarrisonQuota - (Wave <= 1 && n.Type != NodeMap.NodeType.Bastion ? 1 : 0);
+                    if (n.Garrison.Count >= quota) { break; }
                     EnemyShip e = Enemies.Spawn(kind, n.Pos + off, Mathf.Max(1, Wave), 0.8f);
                     if (e == null) { break; }
                     e.HoldStation = true;             // @trace UNIT-002 静止化守军
@@ -264,18 +366,23 @@ namespace TideShot.Gameplay
 
         public bool BuildFleet(Fleet.Kind kind)
         {
-            // @trace UNIT-001 造价与上限
-            if (State != BreakerState.Layout || LivingFleet() >= MaxFleet) { return false; }
-            var home = Map.Nodes[0];
-            var probe = Fleet.Spawn(kind, home.Pos + Vector2.right * UnityEngine.Random.Range(-0.5f, 0.5f),
-                transform, SpriteFactory.Triangle(72, FleetColor, Color.white),
-                SpriteFactory.Glow(96, FleetColor));
+            // @trace UNIT-001 造价与上限；生产改为队列（红警式心跳）
+            if (State != BreakerState.Layout || LivingFleet() + _buildQueue.Count >= MaxFleet)
+            { return false; }
+            var probe = new Fleet { Type = kind };
             int cost = probe.Cost;
-            if (Tide < cost) { Destroy(probe.Go); return false; }
+            if (Tide < cost) { return false; }
             Tide -= cost;
-            FleetUnits.Add(probe);
+            _buildQueue.Enqueue(kind);
+            if (!Building) { _buildTimer = BuildTime; }
             Sfx.Pickup();
             return true;
+        }
+
+        /// <summary>AI 指挥官提前开波（等价于按空格）。</summary>
+        public void ForceStartWave()
+        {
+            if (State == BreakerState.Layout) { StartWave(); }
         }
 
         private void TickFleets(float dt)
