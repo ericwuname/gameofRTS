@@ -38,6 +38,15 @@ namespace TideShot.Boot
             var starfield = starGo.AddComponent<Starfield>();
             starfield.Initialize(mat);
 
+            // ===== 破潮 TideBreaker 模式（prototype/tidebreaker 分支）=====
+            // @trace SCOPE: M1-M4。STG 装配保留在下方，main 分支可随时切回。
+            const bool BreakerMode = true;
+            if (BreakerMode)
+            {
+                BuildBreaker(cam, mat);
+                return; // 破潮装配到此为止，不走 STG 分支
+            }
+
             var playerGo = new GameObject("Player");
             playerGo.transform.SetParent(transform, false);
             var player = playerGo.AddComponent<PlayerShip>();
@@ -95,6 +104,43 @@ namespace TideShot.Boot
             hud.Initialize(Game, cam);
 
             Debug.Log("[ShotBoot] boot done, state=" + Game.State);
+        }
+
+        /// <summary>破潮装配 @trace LOOP-001 MAP-001。复用 PlayerShip/BulletField/EnemyManager/FxLayer/Sfx。</summary>
+        private void BuildBreaker(Camera cam, Material mat)
+        {
+            var playerGo = new GameObject("Player");
+            playerGo.transform.SetParent(transform, false);
+            var player = playerGo.AddComponent<PlayerShip>();
+
+            var enemyGo = new GameObject("Enemies");
+            enemyGo.transform.SetParent(transform, false);
+            var enemies = enemyGo.AddComponent<EnemyManager>();
+
+            var bulletGo = new GameObject("Bullets");
+            bulletGo.transform.SetParent(transform, false);
+            var bullets = bulletGo.AddComponent<BulletField>();
+
+            var fxGo = new GameObject("FxLayer");
+            fxGo.transform.SetParent(transform, false);
+            var fx = fxGo.AddComponent<FxLayer>();
+
+            player.Initialize(new PlayerStatsConfig());
+            fx.Initialize(mat);
+            enemies.Initialize(bullets, player, mat);
+            bullets.Initialize(mat, enemies, player);
+
+            var gameGo = new GameObject("BreakerDirector");
+            gameGo.transform.SetParent(transform, false);
+            var breaker = gameGo.AddComponent<BreakerDirector>();
+            breaker.Initialize(cam, player, bullets, enemies, fx, mat);
+
+            Sfx.Initialize(gameObject);
+
+            var hud = gameObject.AddComponent<TideShot.UI.BreakerHud>();
+            hud.Initialize(breaker, cam);
+
+            Debug.Log("[ShotBoot] breaker boot done, seed=" + breaker.Map.Seed);
         }
 
         private Camera SetupCamera()

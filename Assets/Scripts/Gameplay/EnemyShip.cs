@@ -33,6 +33,9 @@ namespace TideShot.Gameplay
         /// </summary>
         public bool IsBoss { get; private set; }
 
+        /// <summary>破潮守军驻扎模式 @trace UNIT-002。true 时只开火不移动。</summary>
+        public bool HoldStation { get; set; }
+
         /// <summary>开火预警窗口（秒）。Into the Breach 式完美信息：
         /// 敌人将做什么提前展示，「躲」从纯反应变成预判解谜，
         /// 同时消灭「毫无征兆的死亡」——公平死亡的第一条件是可预知。</summary>
@@ -234,6 +237,12 @@ namespace TideShot.Gameplay
 
         private void TickMove(float dt)
         {
+            // 破潮守军驻扎模式 @trace UNIT-002：静止炮台，只开火不移动
+            if (HoldStation)
+            {
+                _velocity = Vector2.zero;
+                return;
+            }
             switch (Kind)
             {
                 case EnemyKind.Drifter:
