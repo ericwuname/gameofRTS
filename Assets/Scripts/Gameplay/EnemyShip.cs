@@ -36,6 +36,18 @@ namespace TideShot.Gameplay
         /// <summary>破潮守军驻扎模式 @trace UNIT-002。true 时只开火不移动。</summary>
         public bool HoldStation { get; set; }
 
+        /// <summary>
+        /// 破潮守军降压档 @trace UNIT-002（用户反馈「这种密度谁能玩」）：
+        /// RTS 级威胁 = 「站位错了会挨打」，不是 STG 级弹幕海。
+        /// 开火间隔 ×2.4、弹速 ×0.7、扇形 5→3 发。STG 路径不受影响。
+        /// </summary>
+        public void SetGarrisonProfile()
+        {
+            _spec.FireInterval *= 2.4f;
+            _spec.BulletSpeed *= 0.7f;
+            _spec.FanCount = 3;
+        }
+
         /// <summary>开火预警窗口（秒）。Into the Breach 式完美信息：
         /// 敌人将做什么提前展示，「躲」从纯反应变成预判解谜，
         /// 同时消灭「毫无征兆的死亡」——公平死亡的第一条件是可预知。</summary>
@@ -359,7 +371,8 @@ namespace TideShot.Gameplay
             switch (Kind)
             {
                 case EnemyKind.Shooter:
-                    _bullets.SpawnFan(Position, _player.Position, 5, 46f, _spec.BulletSpeed, 8, _spec.BulletColor);
+                    // FanCount 可调：破潮守军 3 发小扇（RTS 级压力，非 STG 弹幕海）
+                    _bullets.SpawnFan(Position, _player.Position, _spec.FanCount, 46f, _spec.BulletSpeed, 8, _spec.BulletColor);
                     break;
                 case EnemyKind.Spinner:
                     _bullets.SpawnRing(Position, 16, _spec.BulletSpeed, 8, _spec.BulletColor, _life * 40f);
@@ -482,6 +495,8 @@ namespace TideShot.Gameplay
         public float Radius;
         public int Score;
         public Vector2 StartPos;
+        /// <summary>扇形弹发数（破潮守军 3 = RTS 级压力；STG 默认 5）。</summary>
+        public int FanCount;
         public Vector2 StartVelocity;
         public float HoverY;
         public float FireInterval;

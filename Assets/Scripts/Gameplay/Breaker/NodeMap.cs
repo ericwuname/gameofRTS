@@ -65,36 +65,47 @@ namespace TideShot.Gameplay
                    UnityEngine.Random.Range(0, 0xFFFF).ToString("X4");
         }
 
-        /// <summary>手工拓扑模板 + 随机抖动（完整约束校验管线 LATER，诚实降级）。</summary>
+        /// <summary>
+        /// 双线拓扑 v2 @trace MAP-001：14 节点（反馈「地图太小布局感不足」）。
+        /// 南北双通道 + 中路枢纽，多路取舍空间比单线 v1 大一倍。
+        /// </summary>
         private void Build()
         {
-            // 拓扑：0母港 → 1矿 → 2哨 → 3厂 → 4哨 → 5矿 → 6哨 → 7要塞，8支线矿
             var template = new (NodeType t, float x, float y, bool rich)[]
             {
-                (NodeType.Home,       -14f, -7.0f, false),
-                (NodeType.Mine,        -9f, -3.5f, false),
-                (NodeType.Sentry,      -4f, -1.0f, false),
-                (NodeType.FactoryNode,  0f, -5.5f, false),
-                (NodeType.Sentry,       3f,  1.5f, false),
-                (NodeType.Mine,         7f, -4.5f, true),
-                (NodeType.Sentry,       9f,  4.0f, false),
-                (NodeType.Bastion,     13f,  6.5f, false),
-                (NodeType.Mine,        -1f,  6.0f, false),
+                (NodeType.Home,       -16f, -7.0f, false),  // 0
+                (NodeType.Mine,       -11f, -4.0f, false),  // 1
+                (NodeType.Sentry,      -6f, -1.5f, false),  // 2
+                (NodeType.Mine,        -2f, -5.5f, false),  // 3
+                (NodeType.FactoryNode,  0f,  0.5f, false),  // 4 中路枢纽
+                (NodeType.Sentry,       4f, -2.5f, false),  // 5
+                (NodeType.Mine,         8f, -5.5f, true ),  // 6 富矿
+                (NodeType.Sentry,       8f,  2.5f, false),  // 7
+                (NodeType.Mine,         2f,  5.5f, false),  // 8
+                (NodeType.Sentry,      12f,  4.0f, false),  // 9
+                (NodeType.Bastion,     16f,  6.5f, false),  // 10
+                (NodeType.Mine,        -8f,  4.5f, false),  // 11
+                (NodeType.Sentry,      -3f,  2.5f, false),  // 12
+                (NodeType.Mine,        13f,  0.5f, true ),  // 13 富矿（要塞前哨）
             };
             // 抖动：同 seed 结果确定；幅度小保证不破坏可读拓扑
             for (int i = 0; i < template.Length; i++)
             {
                 var t = template[i];
-                float jx = t.x == 0f && t.y == 0f ? 0 : (float)(_rng.NextDouble() - 0.5) * 1.2f;
-                float jy = (float)(_rng.NextDouble() - 0.5) * 1.2f;
+                float jx = (float)(_rng.NextDouble() - 0.5) * 1.0f;
+                float jy = (float)(_rng.NextDouble() - 0.5) * 1.0f;
                 var n = new Node { Id = i, Type = t.t, Pos = new Vector2(t.x + jx, t.y + jy) };
                 if (t.t == NodeType.Bastion) { BastionId = i; n.BastionHp = 260f; }
                 Nodes.Add(n);
             }
             int[][] linkPairs =
             {
-                new[]{0,1}, new[]{1,2}, new[]{0,3}, new[]{3,4}, new[]{1,8},
-                new[]{2,4}, new[]{4,5}, new[]{4,6}, new[]{5,6}, new[]{6,7}, new[]{8,2},
+                // 南线
+                new[]{0,1}, new[]{1,2}, new[]{2,4}, new[]{3,4}, new[]{0,3},
+                new[]{4,5}, new[]{5,6}, new[]{5,9}, new[]{6,9}, new[]{9,10},
+                // 北线
+                new[]{1,11}, new[]{11,12}, new[]{12,4}, new[]{12,8}, new[]{8,7},
+                new[]{7,9}, new[]{7,10}, new[]{6,13}, new[]{13,10},
             };
             foreach (var p in linkPairs)
             {

@@ -146,6 +146,13 @@ namespace TideShot.Boot
             var server = serverGo.AddComponent<TideShot.Gameplay.BreakerServer>();
             server.Initialize(breaker, player);
 
+            // F9 录屏：破潮模式同样可用（帧序列 + meta.json）
+            var recGo2 = new GameObject("Recorder");
+            recGo2.transform.SetParent(transform, false);
+            var breakerRec = recGo2.AddComponent<TideShot.Control.ScreenRecorder>();
+            breakerRec.Initialize(cam, breaker);
+            Recorder = breakerRec;
+
             Debug.Log("[ShotBoot] breaker boot done, seed=" + breaker.Map.Seed);
         }
 

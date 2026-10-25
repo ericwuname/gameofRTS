@@ -49,6 +49,7 @@ namespace TideShot.Gameplay
         private int _lastNet;
         private string _logPath;
         private float _startTime;
+        private Camera _cam;                              // RTS 相机 @trace MAP-001
 
         private static readonly Color FleetColor = new Color32(0x7F, 0xF0, 0xFF, 0xFF);
 
@@ -59,6 +60,9 @@ namespace TideShot.Gameplay
             Bullets = bullets;
             Enemies = enemies;
             Fx = fx;
+            _cam = cam;
+            // 地图扩大到 ±16，默认视野拉远 + 滚轮缩放（RTS 三 C 之 Camera）
+            if (_cam != null) { _cam.orthographicSize = 12.5f; }
 
             Map = new NodeMap(NodeMap.RollSeed());
             Tide = 60;                                    // @trace ECON-001
@@ -100,6 +104,8 @@ namespace TideShot.Gameplay
         {
             if (State == BreakerState.Over) { return; }
 
+            TickCamera();
+
             if (State == BreakerState.Layout)
             {
                 // 波间：战术层冻结，但守军弹幕继续飘（压迫感）；旗舰不可操作
@@ -122,6 +128,27 @@ namespace TideShot.Gameplay
             Fx.Tick(dt);
 
             if (WaveTimer <= 0f) { EndWave(); }
+        }
+
+        /// <summary>
+        /// RTS 相机 @trace MAP-001：滚轮缩放（8~15）+ 缓动跟随舰队重心。
+        /// 反馈「地图太小布局感不足」——视野拉远 + 地图扩到 14 节点一起解。
+        /// </summary>
+        private void TickCamera()
+        {
+            if (_cam == null) { return; }
+            float scroll = Input.GetAxis("Mouse ScrollWheel");
+            if (scroll != 0f)
+            {
+                _cam.orthographicSize = Mathf.Clamp(
+                    _cam.orthographicSize - scroll * 6f, 8f, 15f);
+            }
+            Vector2 target = LivingFleet() > 0
+                ? (FleetCenter() + Map.Nodes[SelectedNode].Pos) * 0.5f
+                : (Map.Nodes[0].Pos + Map.Nodes[SelectedNode].Pos) * 0.5f;
+            var t = _cam.transform;
+            t.position = Vector3.Lerp(t.position,
+                new Vector3(target.x, target.y, -10f), Time.deltaTime * 2.5f);
         }
 
         /// <summary>生产队列 @trace UNIT-001：红警式心跳，扣款即时、舰体到时下水。</summary>
@@ -306,6 +333,7 @@ namespace TideShot.Gameplay
                     EnemyShip e = Enemies.Spawn(kind, n.Pos + off, Mathf.Max(1, Wave), 0.8f);
                     if (e == null) { break; }
                     e.HoldStation = true;             // @trace UNIT-002 静止化守军
+                    e.SetGarrisonProfile();           // RTS 级弹幕降压
                     e.Died += OnGarrisonDied;
                     n.Garrison.Add(e);
                     _garrisonIndex[e] = n;

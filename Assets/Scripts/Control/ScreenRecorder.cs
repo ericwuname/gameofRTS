@@ -34,6 +34,7 @@ namespace TideShot.Control
 
         private Camera _cam;
         private GameDirector _game;
+        private Gameplay.BreakerDirector _breaker;
         private float _timer;
         private int _frames;
         private float _recordedSeconds;
@@ -42,6 +43,13 @@ namespace TideShot.Control
         {
             _cam = cam;
             _game = game;
+        }
+
+        /// <summary>破潮模式重载：meta.json 写破潮字段（F9 录屏两模式通用）。</summary>
+        public void Initialize(Camera cam, Gameplay.BreakerDirector breaker)
+        {
+            _cam = cam;
+            _breaker = breaker;
         }
 
         private void Update()
@@ -164,7 +172,15 @@ namespace TideShot.Control
             sb.Append("  \"frames\": ").Append(_frames).Append(",\n");
             sb.Append("  \"seconds\": ").Append(_recordedSeconds.ToString("0.00")).Append(",\n");
             sb.Append("  \"captureFps\": ").Append(CaptureFps.ToString("0")).Append(",\n");
-            if (_game != null)
+            if (_breaker != null)
+            {
+                sb.Append("  \"finalTide\": ").Append(_breaker.Tide).Append(",\n");
+                sb.Append("  \"finalWave\": ").Append(_breaker.Wave).Append(",\n");
+                sb.Append("  \"fleet\": ").Append(_breaker.LivingFleet()).Append(",\n");
+                sb.Append("  \"commander\": \"").Append(_breaker.CommanderName).Append("\",\n");
+                sb.Append("  \"state\": \"").Append(_breaker.State).Append("\",\n");
+            }
+            else if (_game != null)
             {
                 sb.Append("  \"finalScore\": ").Append(_game.Score).Append(",\n");
                 sb.Append("  \"finalWave\": ").Append(_game.Wave).Append(",\n");

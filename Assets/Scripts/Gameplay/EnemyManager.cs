@@ -214,7 +214,8 @@ namespace TideShot.Gameplay
                 SpinSpeed = 0f,
                 BulletSpeed = 7.5f + w * 0.22f,
                 FireInterval = 0f,
-                FirstFireDelay = 1.1f
+                FirstFireDelay = 1.1f,
+                FanCount = 5
             };
 
             switch (kind)
